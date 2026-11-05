@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>과산화수소 농도에 따른 카탈라아제 반응 속도 시뮬레이터</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <!-- Header -->
+    <header class="w-full max-w-6xl mb-6 text-center">
+        <h1 class="text-3xl font-extrabold text-blue-600 tracking-tight">과산화수소 농도에 따른 카탈라아제 반응 속도 시뮬레이터</h1>
+        <p class="text-slate-500 text-sm mt-1 font-medium">미카엘리스-멘텐 및 기질 저해(Substrate Inhibition) 모델 기반 가상 반응 분석기</p>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <main class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Controls & Status Panel -->
+        <div class="bg-white p-6 rounded-2xl shadow-md flex flex-col justify-between border border-slate-200">
+            <div>
+                <h2 class="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
+                    <span>🧪</span> 실험 농도 선택
+                </h2>
+                
+                <!-- Concentration Buttons (5, 10, 15, 20, 25%) -->
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-slate-600 mb-2">과산화수소($H_2O_2$) 단계별 농도</label>
+                    <div class="grid grid-cols-5 gap-2" id="concBtnGroup">
+                        <button data-conc="5" class="conc-btn py-2.5 bg-slate-100 hover:bg-blue-50 text-slate-700 rounded-xl text-sm font-bold border border-slate-200 transition">5%</button>
+                        <button data-conc="10" class="conc-btn py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold transition shadow-md shadow-blue-500/20">10%</button>
+                        <button data-conc="15" class="conc-btn py-2.5 bg-slate-100 hover:bg-blue-50 text-slate-700 rounded-xl text-sm font-bold border border-slate-200 transition">15%</button>
+                        <button data-conc="20" class="conc-btn py-2.5 bg-slate-100 hover:bg-blue-50 text-slate-700 rounded-xl text-sm font-bold border border-slate-200 transition">20%</button>
+                        <button data-conc="25" class="conc-btn py-2.5 bg-slate-100 hover:bg-amber-50 text-slate-700 rounded-xl text-sm font-bold border border-slate-200 transition">25%</button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-3 text-center">선택된 농도: <span id="selectedConcText" class="text-blue-600 font-extrabold text-sm">10%</span></p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-2 mb-4">
+                    <button id="startBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-blue-500/20">실험 측정 시작 (Start)</button>
+                    <button id="resetBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-3 rounded-xl transition">초기화</button>
+                </div>
+            </div>
+
+            <!-- Status & Failure Analysis Box -->
+            <div id="statusBox" class="bg-blue-50 p-4 rounded-xl border border-blue-200 mt-2 transition">
+                <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">효소 반응 속도론 고찰</span>
+                <p id="statusText" class="text-sm font-bold text-blue-900 mt-1">10% 농도: 최적 활성 구간에 가까워 안정적인 압력 상승과 활발한 기포 발생을 보임.</p>
+            </div>
+        </div>
+
+        <!-- Beaker Visual & Graph Panel -->
+        <div class="md:col-span-2 grid grid-cols-1 lg:grid-cols-5 gap-6">
+            
+            <!-- Beaker Visual with Dynamic Bubbles -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-between border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">실시간 산소 발생 비커</h3>
+                <div class="relative w-48 h-64 border-b-4 border-x-4 border-slate-400 rounded-b-2xl bg-blue-50/40 flex items-end justify-center overflow-hidden shadow-inner">
+                    <div class="absolute bottom-0 w-full h-3/5 bg-blue-200/50 border-t border-blue-300"></div>
+                    <!-- New Potato Cubes -->
+                    <div class="absolute bottom-4 flex gap-1 z-10">
+                        <div class="w-6 h-6 bg-amber-600 rounded-sm border border-amber-800 shadow"></div>
+                        <div class="w-6 h-6 bg-amber-600 rounded-sm border border-amber-800 shadow"></div>
+                        <div class="w-6 h-6 bg-amber-600 rounded-sm border border-amber-800 shadow"></div>
+                    </div>
+                    <canvas id="bubbleCanvas" class="absolute inset-0 z-20 pointer-events-none"></canvas>
+                </div>
+                <p class="text-xs text-slate-400 mt-3 text-center">반응 속도에 따른 기포 생성량 시각화</p>
+            </div>
+
+            <!-- Pressure Graph Simulation -->
+            <div class="lg:col-span-3 bg-white p-6 rounded-2xl shadow-md flex flex-col justify-between border border-slate-200">
+                <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
+                    <h3 class="text-lg font-bold text-slate-800">실시간 압력(kPa) 변화 측정</h3>
+                    <span id="badgeConc" class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-bold border border-blue-200">10% 조건</span>
+                </div>
+                <div class="relative w-full h-64">
+                    <canvas id="sparkChart"></canvas>
+                </div>
+                <p class="text-xs text-slate-400 mt-2 text-center">X축: 시간(0~180초) / Y축: 압력(102.40 ~ 103.00 kPa)</p>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Script Logic -->
+    <script>
+        let currentConc = 10;
+        const concButtons = document.querySelectorAll('.conc-btn');
+        const selectedConcText = document.getElementById('selectedConcText');
+        const badgeConc = document.getElementById('badgeConc');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusText = document.getElementById('statusText');
+        const statusBox = document.getElementById('statusBox');
+
+        // Bubble Canvas Setup
+        const canvas = document.getElementById('bubbleCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 192;
+        canvas.height = 256;
+
+        // Chart.js Setup
+        const ctxChart = document.getElementById('sparkChart').getContext('2d');
+        let chartTime = 0;
+        let isRunning = false;
+        let animationInterval = null;
+
+        const sparkChart = new Chart(ctxChart, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '압력 (kPa)',
+                    data: [],
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.08)',
+                    borderWidth: 3.5,
+                    pointRadius: 0,
+                    tension: 0.25,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Time (s)', color: '#64748b', font: { weight: 'bold' } },
+                        min: 0,
+                        max: 180,
+                        ticks: { color: '#64748b', stepSize: 30 },
+                        grid: { color: '#f1f5f9' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Pressure (kPa)', color: '#64748b', font: { weight: 'bold' } },
+                        min: 102.40,
+                        max: 103.00,
+                        ticks: { color: '#64748b', stepSize: 0.1 },
+                        grid: { color: '#e2e8f0' }
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Concentration Button Click Handler
+        concButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (isRunning) return;
+                concButtons.forEach(b => {
+                    b.classList.remove('bg-blue-600', 'text-white', 'bg-amber-500', 'shadow-md');
+                    b.classList.add('bg-slate-100', 'text-slate-700');
+                });
+                
+                const btnConc = parseInt(e.target.getAttribute('data-conc'));
+                currentConc = btnConc;
+                selectedConcText.innerText = currentConc + '%';
+                badgeConc.innerText = `${currentConc}% 조건`;
+
+                if (currentConc === 25) {
+                    e.target.classList.remove('bg-slate-100', 'text-slate-700');
+                    e.target.classList.add('bg-amber-500', 'text-white', 'shadow-md');
+                    statusBox.className = "bg-amber-50 p-4 rounded-xl border border-amber-200 mt-2 transition";
+                    statusText.innerText = `⚠️ [25% 고농도 기질 저해] 과도한 기질로 인해 효소 활성이 떨어져, 15% 조건에 비해 압력 상승 기울기가 둔화되고 기포 발생이 줄어듦.`;
+                    statusText.className = "text-sm font-bold text-amber-800 mt-1";
+                } else {
+                    e.target.classList.remove('bg-slate-100', 'text-slate-700');
+                    e.target.classList.add('bg-blue-600', 'text-white', 'shadow-md');
+                    statusBox.className = "bg-blue-50 p-4 rounded-xl border border-blue-200 mt-2 transition";
+                    statusText.innerText = `${currentConc}% 농도: 미카엘리스-멘텐 반응 속도론에 따라 기질 농도에 비례하여 압력이 상승함.`;
+                    statusText.className = "text-sm font-bold text-blue-900 mt-1";
+                }
+            });
+        });
+
+        // Scientific Substrate Inhibition Slopes (Proper Enzyme Kinetics)
+        function getPressureSlope(conc) {
+            switch(conc) {
+                case 5:  return 0.0012; // 저농도: 느린 반응
+                case 10: return 0.0024; // 중간 농도
+                case 15: return 0.0033; // 최적 활성 구간 (가장 가파름)
+                case 20: return 0.0025; // 포화 도달 후 약간 정체
+                case 25: return 0.0009; // 기질 저해로 인해 속도가 다시 눈에 띄게 느려짐
+                default: return 0.0024;
+            }
+        }
+
+        // Start Real-Time Simulation
+        startBtn.addEventListener('click', () => {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50');
+
+            sparkChart.data.labels = [];
+            sparkChart.data.datasets[0].data = [];
+            chartTime = 0;
+
+            const slope = getPressureSlope(currentConc);
+            let currentPressure = 102.42;
+
+            animationInterval = setInterval(() => {
+                if (chartTime > 180) {
+                    clearInterval(animationInterval);
+                    isRunning = false;
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50');
+                    return;
+                }
+
+                const noise = (Math.random() - 0.5) * 0.015;
+                currentPressure += slope + (noise * 0.05);
+
+                sparkChart.data.labels.push(chartTime);
+                sparkChart.data.datasets[0].data.push(Math.min(103.00, currentPressure).toFixed(3));
+                sparkChart.update('none');
+
+                chartTime += 3;
+            }, 50);
+        });
+
+        // Reset Simulation
+        resetBtn.addEventListener('click', () => {
+            clearInterval(animationInterval);
+            isRunning = false;
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50');
+            chartTime = 0;
+            sparkChart.data.labels = [];
+            sparkChart.data.datasets[0].data = [];
+            sparkChart.update();
+        });
+
+        // Dynamic Bubble Visualizer based on Reaction Speed
+        let bubbles = Array.from({length: 35}, () => ({
+            x: Math.random() * canvas.width,
+            y: canvas.height - 30,
+            r: Math.random() * 2.5 + 1.2,
+            speed: Math.random() * 1.5 + 0.6
+        }));
+
+        function drawBubbles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const slopeFactor = getPressureSlope(currentConc) * 1000;
+
+            for(let i = 0; i < Math.min(bubbles.length, slopeFactor * 8); i++) {
+                let b = bubbles[i];
+                b.y -= b.speed * (slopeFactor / 2.5);
+                if (b.y < 30) b.y = canvas.height - 30;
+
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(37, 99, 235, 0.5)';
+                ctx.fill();
+            }
+            requestAnimationFrame(drawBubbles);
+        }
+        drawBubbles();
+    </script>
+</body>
+</html>
